@@ -1,4 +1,4 @@
-**English | [简体中文](README_CN.md)**
+**English | [简体中文](README_cn.md)**
 <div id="top"></div>
 
 [![Contributors][contributors-shield]][contributors-url]
@@ -16,7 +16,7 @@
     </a>
 <h3 align="center">OpenBus</h3>
     <p align="center">
-    project_description
+    Chisel bus building blocks: AMBA (AXI / AXI-Lite / APB / AHB stubs), bridges, and command-style master hosts.
     <br />
     <a href="https://github.com/MoonGrt/OpenBus"><strong>Explore the docs »</strong></a>
     <br />
@@ -35,15 +35,15 @@
 <details open>
   <summary>Contents</summary>
   <ol>
-    <li><a href="#file-tree">File Tree</a></li>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-    </li>
+    <li><a href="#about-the-project">About</a></li>
+    <li><a href="#build--test">Build &amp; test</a></li>
+    <li><a href="#layout">Source layout</a></li>
+    <li><a href="#command-style-masters">Command-style masters</a></li>
+    <li><a href="#simulation">Simulation</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
 </details>
 
@@ -51,24 +51,71 @@
 
 
 
-<!-- FILE TREE -->
-## File Tree
-
-```
-└─ Project
-  ├─ .gitignore
-  ├─ .gitmodules
-  ├─ LICENSE
-  ├─ README.md
-  └─ README_cn.md
-```
-
-
-
-<!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com) Here's a blank OpenBuslate to get started: To avoid retyping too much info. Do a search and replace with your text editor for the following: `github_username`, `repo_name`, `twitter_handle`, `linkedin_username`, `email_client`, `email`, `project_title`, `project_description`</p></body></html>
+OpenBus is a small **Chisel 7** library of on-chip interconnect pieces. The focus is **AMBA-style** ports and glue logic you can instantiate next to your own modules.
+
+- **AXI4 / AXI4-Lite**: bundles, simple register slaves, crossbar (1:1), ID remap, stream FIFO, bridges (e.g. AXI-Lite → APB, AXI-Lite → AXI4 single-beat master).
+- **APB**: directed master/slave IO, decoder, register slave, example subsystem.
+- **AHB**: register slave and stubs for larger fabric (work in progress).
+- **Other** (`fabric`, `wishbone`, `tilelink`, `avalon`, …): minimal stubs so the repo compiles as one library; expand as needed.
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## Build & test
+
+Requires **JDK 17+** and [sbt](https://www.scala-sbt.org/).
+
+```bash
+sbt compile
+sbt test
+```
+
+Tests use **elaboration only** (`ChiselStage.emitCHIRRTL`) so they do not require Verilator.
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## Layout
+
+| Path | Role |
+|------|------|
+| `src/main/scala/amba/axi/` | AXI4, AXI-Lite, AXI-Stream, bridges, `host/` command masters |
+| `src/main/scala/amba/apb/` | APB IO, slaves, decoder, `ApbMasterHost` |
+| `src/main/scala/amba/ahb/` | AHB IO and register slave |
+| `src/main/scala/util/` | Small helpers (queues, counters, …) |
+| `src/test/scala/amba/` | Elaboration tests |
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## Command-style masters
+
+For a **Decoupled** “enqueue one transaction” interface, use:
+
+- **`amba.axi.host.AxiLiteMasterHost`** — drives `AxiLiteMasterPort` (one outstanding read or write).
+- **`amba.axi.host.Axi4SingleBeatMasterHost`** — single-beat full AXI4 with fixed ID `0`, `LEN=0`, INCR burst, `WLAST`/`RLAST` asserted.
+- **`amba.apb.ApbMasterHost`** — two-phase APB master (`SETUP` then `ACCESS`).
+
+Helpers **`AxiLiteHost.tieOffMasterIdle`** / **`tieOffSlaveIdle`** and **`Axi4Host.tieOffMasterIdle`** tie unused ports to a safe idle pattern.
+
+Example pattern (inside your `Module`):
+
+```scala
+import amba.axi.axilite._
+import amba.axi.host._
+
+val p = AxiLiteParams(addrBits = 16, dataBits = 32)
+val host = Module(new AxiLiteMasterHost(p))
+// host.io.cmd <> yourCommandSource
+// host.io.rsp <> yourResultSink
+// host.io.axi <> axiLiteSlaveOrBridge
+```
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## Simulation
+
+Cycle-accurate tests with **ChiselSim** typically need **Verilator** on `PATH`. This repository’s default tests avoid that. If you add `simulate { ... }` tests locally, install Verilator and follow the [Chisel documentation](https://www.chisel-lang.org/) for your Chisel version.
+
 <p align="right">(<a href="#top">top</a>)</p>
 
 
@@ -76,12 +123,11 @@
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Feature 1
-- [ ] Feature 2
-- [ ] Feature 3
-    - [ ] Nested Feature
+- [ ] Fuller AXI4 burst / multi-ID masters and arbiters
+- [ ] AHB fabric beyond stubs
+- [ ] Optional Verilator-based reference tests in CI
 
-See the [open issues](https://github.com/github_username/repo_name/issues) for a full list of proposed features (and known issues).
+See [open issues](https://github.com/MoonGrt/OpenBus/issues).
 <p align="right">(<a href="#top">top</a>)</p>
 
 
@@ -123,19 +169,10 @@ Project Link: [MoonGrt/OpenBus](https://github.com/MoonGrt/OpenBus)
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
+* [Chisel](https://www.chisel-lang.org/)
+* [CIRCT / firtool](https://github.com/llvm/circt) (via Chisel 7)
 
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
 <p align="right">(<a href="#top">top</a>)</p>
-
-
 
 
 <!-- MARKDOWN LINKS & IMAGES -->

@@ -16,7 +16,7 @@
     </a>
 <h3 align="center">OpenBus</h3>
     <p align="center">
-    项目简介
+    基于 Chisel 的片上总线积木库：AMBA（AXI / AXI-Lite / APB / AHB 桩）、桥接与命令式主机封装。
     <br />
     <a href="https://github.com/MoonGrt/OpenBus"><strong>浏览文档 »</strong></a>
     <br />
@@ -35,15 +35,15 @@
 <details open>
   <summary>目录</summary>
   <ol>
-    <li><a href="#文件树">文件树</a></li>
-    <li>
-      <a href="#关于本项目">关于本项目</a>
-    </li>
+    <li><a href="#关于本项目">关于本项目</a></li>
+    <li><a href="#编译与测试">编译与测试</a></li>
+    <li><a href="#目录结构">目录结构</a></li>
+    <li><a href="#命令式主机">命令式主机</a></li>
+    <li><a href="#仿真">仿真</a></li>
     <li><a href="#路线图">路线图</a></li>
     <li><a href="#贡献">贡献</a></li>
     <li><a href="#许可证">许可证</a></li>
     <li><a href="#联系我们">联系我们</a></li>
-    <li><a href="#致谢">致谢</a></li>
   </ol>
 </details>
 
@@ -51,24 +51,71 @@
 
 
 
-<!-- 文件树 -->
-## 文件树
-
-```
-└─ Project
-  ├─ .gitignore
-  ├─ .gitmodules
-  ├─ LICENSE
-  ├─ README.md
-  └─ README_cn.md
-```
-
-
-
-<!-- 关于本项目 -->
 ## 关于本项目
 
-[![产品截图][product-screenshot]](https://example.com) 这是一个用于快速开始的空白模板：为了避免重复输入太多信息，请使用你的文本编辑器查找替换下面的内容：`github_username`, `repo_name`, `twitter_handle`, `linkedin_username`, `email_client`, `email`, `项目标题`, `项目简介`</p></body></html>
+OpenBus 是一个 **Chisel 7** 总线相关 RTL 积木库，便于在自定义模块旁例化标准端口与桥接逻辑。
+
+- **AXI4 / AXI4-Lite**：通道 Bundle、简单寄存器从机、1:1 交叉开关、ID 重映射、流 FIFO、桥（如 AXI-Lite → APB、AXI-Lite → AXI4 单拍主机侧）。
+- **APB**：显式 Master/Slave IO、地址译码、寄存器从机、示例子系统。
+- **AHB**：寄存器从机与更大互连的桩（持续完善中）。
+- **其它**（`fabric`、`wishbone`、`tilelink`、`avalon` 等）：最小桩保证整库可编译，可按需扩展。
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## 编译与测试
+
+需要 **JDK 17+** 与 [sbt](https://www.scala-sbt.org/)。
+
+```bash
+sbt compile
+sbt test
+```
+
+当前测试仅做 **elaboration**（`ChiselStage.emitCHIRRTL`），**不依赖 Verilator**。
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## 目录结构
+
+| 路径 | 说明 |
+|------|------|
+| `src/main/scala/amba/axi/` | AXI4、AXI-Lite、AXI-Stream、桥、`host/` 命令式主机 |
+| `src/main/scala/amba/apb/` | APB IO、从机、译码、`ApbMasterHost` |
+| `src/main/scala/amba/ahb/` | AHB IO 与寄存器从机 |
+| `src/main/scala/util/` | 队列、计数器等小工具 |
+| `src/test/scala/amba/` | 综合前 elaboration 测试 |
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## 命令式主机
+
+若希望用 **Decoupled** 接口「入队一条读写、在 `rsp` 取回结果」，可使用：
+
+- **`amba.axi.host.AxiLiteMasterHost`** — 驱动 `AxiLiteMasterPort`，同时仅一条未完成事务。
+- **`amba.axi.host.Axi4SingleBeatMasterHost`** — 全 AXI4 **单拍**传输，固定 ID `0`、`LEN=0`、INCR burst，`WLAST`/`RLAST` 置位。
+- **`amba.apb.ApbMasterHost`** — APB 主机（SETUP → ACCESS 两拍）。
+
+空闲口可用 **`AxiLiteHost.tieOffMasterIdle` / `tieOffSlaveIdle`**、**`Axi4Host.tieOffMasterIdle`** 接到安全默认值。
+
+在你的 `Module` 中的典型接法：
+
+```scala
+import amba.axi.axilite._
+import amba.axi.host._
+
+val p = AxiLiteParams(addrBits = 16, dataBits = 32)
+val host = Module(new AxiLiteMasterHost(p))
+// host.io.cmd <> 命令队列
+// host.io.rsp <> 响应队列
+// host.io.axi <> 对端从机或桥
+```
+
+<p align="right">(<a href="#top">top</a>)</p>
+
+## 仿真
+
+使用 **ChiselSim** 做周期仿真时，通常需要系统安装 **Verilator** 并加入 `PATH`。本仓库默认测试不依赖仿真器。若本地增加 `simulate { ... }` 测试，请参考对应版本 [Chisel 文档](https://www.chisel-lang.org/)。
+
 <p align="right">(<a href="#top">top</a>)</p>
 
 
@@ -76,12 +123,11 @@
 <!-- 路线图 -->
 ## 路线图
 
-- [ ] 功能 1
-- [ ] 功能 2
-- [ ] 功能 3
-    - [ ] 嵌套功能
+- [ ] 更完整的 AXI4 burst / 多 ID 主机与仲裁
+- [ ] AHB 互连（超越当前桩）
+- [ ] CI 中可选的 Verilator 参考测试
 
-到 [open issues](https://github.com/github_username/repo_name/issues) 页查看所有请求的功能 （以及已知的问题）。
+完整讨论见 [Issues](https://github.com/MoonGrt/OpenBus/issues)。
 <p align="right">(<a href="#top">top</a>)</p>
 
 
@@ -122,17 +168,10 @@ Project Link: [MoonGrt/OpenBus](https://github.com/MoonGrt/OpenBus)
 <!-- 致谢 -->
 ## 致谢
 
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
+* [Chisel](https://www.chisel-lang.org/)
+* [CIRCT / firtool](https://github.com/llvm/circt)（经 Chisel 7 调用）
+
 <p align="right">(<a href="#top">top</a>)</p>
-
-
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
